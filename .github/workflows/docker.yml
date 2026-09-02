@@ -58,7 +58,7 @@ jobs:
             runner: ubuntu-24.04-arm
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Image metadata
         id: meta
@@ -111,7 +111,7 @@ jobs:
 
     steps:
       # Needed for the Docker Hub description sync, which reads README.md.
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - uses: docker/setup-buildx-action@v3
 
