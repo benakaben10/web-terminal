@@ -1,0 +1,11 @@
+.git
+.github
+node_modules
+server/node_modules
+**/node_modules
+web/vendor/xterm.js
+web/vendor/xterm.css
+web/vendor/addon-*.js
+web/vendor/fonts
+*.log
+.DS_Store

@@ -1,0 +1,19 @@
+{
+  "name": "Web Terminal",
+  "short_name": "Terminal",
+  "description": "Web terminal quản trị với zsh + oh-my-zsh, tối ưu cho điện thoại",
+  "start_url": ".",
+  "scope": ".",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0d1117",
+  "theme_color": "#0d1117",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 512 512'%3E%3Crect width='512' height='512' rx='112' fill='%230d1117'/%3E%3Cpath d='M112 160l80 80-80 80' stroke='%234f9cf9' stroke-width='40' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M256 336h144' stroke='%234f9cf9' stroke-width='40' stroke-linecap='round'/%3E%3C/svg%3E",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
