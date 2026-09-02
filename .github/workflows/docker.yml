@@ -156,7 +156,7 @@ jobs:
         # otherwise. Failure here must not fail a release that already shipped.
         if: github.ref == 'refs/heads/master'
         continue-on-error: true
-        uses: peter-evans/dockerhub-description@v4
+        uses: peter-evans/dockerhub-description@v5
         with:
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
           password: ${{ secrets.DOCKER_HUB_PAT }}
