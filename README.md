@@ -94,6 +94,16 @@ straight from each vendor's release endpoint at pinned versions you can override
 as build args. The Docker CLI is there without an engine; mount the host's
 `/var/run/docker.sock` to use it.
 
+**Room to spread out on a desktop.** A browser window has space a phone does
+not, so the ▦ button in the toolbar splits it into four terminals, opening
+shells to fill any pane that has none. Each pane carries its own header: the
+shell's title, a picker to swap a different session into that pane, a `+` that
+opens a new one right there, and an `✕` that closes it — leaving the pane
+offering to open another. Click a pane to give it the keyboard; the
+wheel goes to whichever pane is under the pointer. Two panes are available in
+settings as well. Off on touch devices, where a quarter of the screen is too
+few columns to be worth anything.
+
 **A real shell.** `zsh` with `oh-my-zsh`, autosuggestions, syntax highlighting and
 the usual plugins. `powerlevel10k` is installed and a Nerd Font is bundled as a
 webfont, so a powerline theme renders on a phone with no fonts installed.

@@ -39,8 +39,8 @@ tmux copy-mode path) exist because of a specific browser or terminal quirk, and
 the comment that records the quirk is the valuable part. Match the density and
 tone of the code you are editing.
 
-User-facing strings in the UI are Vietnamese. Comments, documentation and commit
-messages are English.
+Everything is in English: UI strings, comments, documentation and commit
+messages.
 
 ## Commits
 

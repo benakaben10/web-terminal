@@ -22,16 +22,16 @@
   <form class="login__card" id="loginForm">
     <div class="login__logo">🖥️</div>
     <h1 id="loginTitle">Web Terminal</h1>
-    <p>Đăng nhập để mở phiên quản trị</p>
+    <p>Sign in to open an admin session</p>
     <div class="login__field">
-      <label for="loginUser">Tài khoản</label>
+      <label for="loginUser">Username</label>
       <input type="text" id="loginUser" autocomplete="username" value="admin" autocapitalize="none" autocorrect="off" spellcheck="false">
     </div>
     <div class="login__field">
-      <label for="loginPass">Mật khẩu</label>
+      <label for="loginPass">Password</label>
       <input type="password" id="loginPass" autocomplete="current-password">
     </div>
-    <button class="btn btn--primary btn--block" type="submit">Đăng nhập</button>
+    <button class="btn btn--primary btn--block" type="submit">Sign in</button>
     <p class="login__error" id="loginError"></p>
   </form>
 </div>
@@ -40,34 +40,38 @@
 <div id="app" hidden>
 
   <header class="topbar">
-    <button class="iconbtn" id="btnMenu" aria-label="Bảng quản trị">☰</button>
-    <span class="status-dot" id="statusDot" data-state="offline" title="Trạng thái kết nối"></span>
+    <button class="iconbtn" id="btnMenu" aria-label="Admin panel">☰</button>
+    <span class="status-dot" id="statusDot" data-state="offline" title="Connection status"></span>
     <div class="topbar__title">
       <span class="topbar__name" id="termTitle">Terminal</span>
-      <span class="topbar__meta" id="termMeta">chưa kết nối</span>
+      <span class="topbar__meta" id="termMeta">not connected</span>
     </div>
-    <button class="iconbtn" id="btnKeyboard" aria-label="Bật bàn phím" aria-pressed="false">⌨</button>
-    <button class="iconbtn" id="btnKeybar" aria-label="Ẩn/hiện thanh phím" aria-pressed="true">⌥</button>
-    <button class="iconbtn" id="btnSettings" aria-label="Cài đặt">⚙</button>
+    <button class="iconbtn" id="btnKeyboard" aria-label="Toggle keyboard" aria-pressed="false">⌨</button>
+    <button class="iconbtn" id="btnKeybar" aria-label="Show or hide the key bar" aria-pressed="true">⌥</button>
+    <button class="iconbtn" id="btnPanes" aria-label="Split into four terminals" aria-pressed="false" hidden>▦</button>
+    <button class="iconbtn" id="btnSettings" aria-label="Settings">⚙</button>
   </header>
 
   <nav class="tabbar">
     <div class="tabbar__scroll" id="tabs" role="tablist"></div>
-    <button class="tabbar__add" id="btnNewTab" aria-label="Phiên mới">+</button>
+    <button class="tabbar__add" id="btnNewTab" aria-label="New session">+</button>
   </nav>
 
   <main class="term-wrap" id="termWrap">
     <div id="terminal"></div>
+    <!-- Per-pane controls, drawn over the grid rather than inside a terminal,
+         so an empty pane can still offer one. -->
+    <div class="pane-ctls" id="paneCtls" hidden></div>
 
-    <div class="preedit" id="preedit" hidden><span class="preedit__label">đang gõ</span><span id="preeditText"></span></div>
-    <button class="scroll-bottom" id="btnScrollBottom" aria-label="Xuống cuối" hidden>↓</button>
-    <button class="copy-sel" id="btnCopySel" hidden>Chép</button>
+    <div class="preedit" id="preedit" hidden><span class="preedit__label">composing</span><span id="preeditText"></span></div>
+    <button class="scroll-bottom" id="btnScrollBottom" aria-label="Jump to bottom" hidden>↓</button>
+    <button class="copy-sel" id="btnCopySel" hidden>Copy</button>
     <div class="overlay" id="overlay" hidden>
       <div>
-        <div class="overlay__title" id="overlayTitle">Mất kết nối</div>
+        <div class="overlay__title" id="overlayTitle">Disconnected</div>
         <p class="overlay__msg" id="overlayMsg"></p>
       </div>
-      <button class="btn btn--primary" id="btnReconnect">Kết nối lại</button>
+      <button class="btn btn--primary" id="btnReconnect">Reconnect</button>
     </div>
   </main>
 
@@ -77,10 +81,10 @@
        data-mode="bar": a real visible field — the only shape iOS Safari reliably
        opens its keyboard for — where the line is edited then sent with Enter. -->
   <div class="inputbar" id="inputBar" data-mode="overlay">
-    <textarea id="imeInput" rows="1" aria-label="Vùng nhập liệu"
+    <textarea id="imeInput" rows="1" aria-label="Input area"
               autocapitalize="none" enterkeyhint="send"
-              placeholder="Gõ lệnh hoặc tiếng Việt rồi nhấn ➤"></textarea>
-    <button class="inputbar__send" id="btnSend" aria-label="Gửi">➤</button>
+              placeholder="Type a command, then press ➤"></textarea>
+    <button class="inputbar__send" id="btnSend" aria-label="Send">➤</button>
   </div>
 
   <div class="keybar" id="keybar">
@@ -92,30 +96,30 @@
 
 <!-- ------------------------------------------------------- admin panel -->
 <div class="scrim" id="scrim"></div>
-<aside class="panel" id="panel" aria-label="Bảng quản trị">
+<aside class="panel" id="panel" aria-label="Admin panel">
   <div class="panel__head">
-    <h2>Quản trị</h2>
-    <button class="iconbtn" id="btnPanelClose" aria-label="Đóng">✕</button>
+    <h2>Administration</h2>
+    <button class="iconbtn" id="btnPanelClose" aria-label="Close">✕</button>
   </div>
   <div class="panel__body">
 
     <section class="section">
-      <h3>Máy chủ</h3>
+      <h3>Server</h3>
       <div id="sysInfo"></div>
     </section>
 
     <section class="section">
-      <h3>Phiên đang chạy</h3>
+      <h3>Running sessions</h3>
       <div id="sessionList"></div>
       <div class="btn-group" style="margin-top:10px">
-        <button class="btn" id="btnRefresh">↻ Làm mới</button>
-        <button class="btn" id="btnNewSession">+ Phiên mới</button>
+        <button class="btn" id="btnRefresh">↻ Refresh</button>
+        <button class="btn" id="btnNewSession">+ New session</button>
       </div>
     </section>
 
     <section class="section">
-      <h3>Tài khoản</h3>
-      <button class="btn btn--danger btn--block" id="btnLogout">Đăng xuất</button>
+      <h3>Account</h3>
+      <button class="btn btn--danger btn--block" id="btnLogout">Sign out</button>
     </section>
 
   </div>
@@ -124,138 +128,148 @@
 <!-- ---------------------------------------------------------- settings -->
 <dialog id="settingsDialog">
   <div class="dialog__head">
-    <h2>Cài đặt</h2>
-    <button class="iconbtn" id="btnSettingsClose" aria-label="Đóng">✕</button>
+    <h2>Settings</h2>
+    <button class="iconbtn" id="btnSettingsClose" aria-label="Close">✕</button>
   </div>
   <div class="dialog__body">
 
     <section class="section">
-      <h3>Hiển thị</h3>
+      <h3>Display</h3>
       <div class="row">
-        <span class="row__label">Cỡ chữ</span>
+        <span class="row__label">Font size</span>
         <div class="stepper">
-          <button id="fontDown" aria-label="Giảm">−</button>
+          <button id="fontDown" aria-label="Decrease">−</button>
           <span id="fontValue">14</span>
-          <button id="fontUp" aria-label="Tăng">+</button>
+          <button id="fontUp" aria-label="Increase">+</button>
         </div>
       </div>
       <div class="row">
-        <span class="row__label">Giao diện</span>
+        <span class="row__label">Theme</span>
         <select id="themeSelect" style="width:auto;min-width:150px">
-          <option value="dark">Tối (mặc định)</option>
-          <option value="light">Sáng</option>
+          <option value="dark">Dark (default)</option>
+          <option value="light">Light</option>
           <option value="dracula">Dracula</option>
           <option value="solarized-dark">Solarized Dark</option>
           <option value="nord">Nord</option>
           <option value="gruvbox">Gruvbox Dark</option>
         </select>
       </div>
+      <div class="row" id="rowPaneLayout">
+        <span class="row__label">Terminal panes
+          <small class="row__hint">Show more than one session at once. A tab from the bar opens in the focused pane; click a pane to focus it. Desktop only — a quarter of a phone screen is too few columns to be usable.</small>
+        </span>
+        <select id="optPaneLayout" style="width:auto;min-width:130px">
+          <option value="1">1 (single)</option>
+          <option value="2">2 side by side</option>
+          <option value="4">4 in a grid</option>
+        </select>
+      </div>
       <div class="row">
-        <span class="row__label">Con trỏ nhấp nháy</span>
+        <span class="row__label">Cursor blink</span>
         <label class="switch"><input type="checkbox" id="optCursorBlink" checked><span class="switch__track"></span></label>
       </div>
       <div class="row">
-        <span class="row__label">Bo dòng dài<small class="row__hint">Hữu ích với màn hình hẹp</small></span>
+        <span class="row__label">Wrap long lines<small class="row__hint">Useful on a narrow screen</small></span>
         <label class="switch"><input type="checkbox" id="optWrapKeys"><span class="switch__track"></span></label>
       </div>
     </section>
 
     <section class="section">
-      <h3>Thao tác</h3>
+      <h3>Behaviour</h3>
       <div class="row">
-        <span class="row__label">Rung khi bấm phím<small class="row__hint">Chỉ trên thiết bị hỗ trợ</small></span>
+        <span class="row__label">Haptic feedback<small class="row__hint">Only on devices that support it</small></span>
         <label class="switch"><input type="checkbox" id="optHaptics" checked><span class="switch__track"></span></label>
       </div>
       <div class="row">
-        <span class="row__label">Cuộn trong tmux
-          <small class="row__hint">tmux chiếm alternate screen nên kéo cuộn không có gì để cuộn. Bật thì kéo lên sẽ tự vào copy-mode của tmux, gõ phím tiếp theo là tự thoát. Chỉ bật khi shell luôn chạy trong tmux.</small>
+        <span class="row__label">Scroll inside tmux
+          <small class="row__hint">tmux holds the alternate screen, so a drag has nothing to scroll. Turn this on and dragging up enters tmux copy-mode by itself; the next key you type leaves it again. Only worth enabling if your shell always runs inside tmux.</small>
         </span>
         <select id="optTmuxScroll" style="width:auto;min-width:130px">
-          <option value="off">Tắt</option>
+          <option value="off">Off</option>
           <option value="ctrl-b">Prefix Ctrl-b</option>
           <option value="ctrl-a">Prefix Ctrl-a</option>
         </select>
       </div>
       <div class="row">
-        <span class="row__label">Tự kết nối lại</span>
+        <span class="row__label">Reconnect automatically</span>
         <label class="switch"><input type="checkbox" id="optAutoReconnect" checked><span class="switch__track"></span></label>
       </div>
       <div class="row">
-        <span class="row__label">Chuông (bell)</span>
+        <span class="row__label">Terminal bell</span>
         <label class="switch"><input type="checkbox" id="optBell"><span class="switch__track"></span></label>
       </div>
     </section>
 
     <section class="section">
-      <h3>Nhập liệu</h3>
+      <h3>Input</h3>
       <div class="row">
-        <span class="row__label">Chế độ IME (tiếng Việt)
-          <small class="row__hint">Bật để gõ Telex/VNI, tiếng Nhật, Trung, Hàn… Tắt nếu dùng bàn phím rời và muốn độ trễ thấp nhất.</small>
+        <span class="row__label">IME mode
+          <small class="row__hint">On for Telex/VNI, Japanese, Chinese, Korean and the like. Off for the lowest latency with a hardware keyboard.</small>
         </span>
         <label class="switch"><input type="checkbox" id="optIme" checked><span class="switch__track"></span></label>
       </div>
       <div class="row">
-        <span class="row__label">Gợi ý của bàn phím
-          <small class="row__hint">Mặc định tắt để lấy thêm chỗ — thanh gợi ý trên bàn phím ảo chiếm một dải chiều cao. Bật lại nếu cần gõ Telex chính xác hơn, vì đó cũng là chỗ bộ gõ hiện chữ đang ghép. iOS còn công tắc riêng ở Cài đặt → Cài đặt chung → Bàn phím → Đoán trước.</small>
+        <span class="row__label">Keyboard suggestions
+          <small class="row__hint">Off by default to win back space: the suggestion strip costs a real band of screen height. Turn it on for more accurate Telex, since that strip is also where the IME shows composing text. iOS has its own switch under Settings → General → Keyboard → Predictive.</small>
         </span>
         <label class="switch"><input type="checkbox" id="optSuggestions"><span class="switch__track"></span></label>
       </div>
       <div class="row">
-        <span class="row__label">Hiện chữ đang ghép
-          <small class="row__hint">Xem trước phần chưa commit của bộ gõ</small>
+        <span class="row__label">Show composing text
+          <small class="row__hint">Previews what the IME has not committed yet</small>
         </span>
         <label class="switch"><input type="checkbox" id="optPreedit" checked><span class="switch__track"></span></label>
       </div>
       <div class="row">
-        <span class="row__label">Thanh nhập liệu
-          <small class="row__hint">Tuỳ chọn, mặc định tắt. Ô nhập hiện rõ, soạn xong nhấn ➤ mới gửi. Bật khi chạm vào terminal mà bàn phím ảo không mở — hay gặp trên iOS/Safari.</small>
+        <span class="row__label">Input bar
+          <small class="row__hint">Optional, off by default. A visible field: compose a line, then press ➤ to send it. Turn it on if tapping the terminal does not open the soft keyboard, which is common on iOS/Safari.</small>
         </span>
         <select id="optInputBar" style="width:auto;min-width:130px">
-          <option value="off">Ẩn</option>
-          <option value="on">Luôn hiện</option>
+          <option value="off">Hidden</option>
+          <option value="on">Always visible</option>
         </select>
       </div>
     </section>
 
     <section class="section">
-      <h3>Thanh phím tắt</h3>
+      <h3>Hotkey bar</h3>
       <p class="hint" style="margin-bottom:10px">
-        Tùy biến từng phím. Chuỗi gửi đi hỗ trợ <code>\e</code> (ESC), <code>^C</code> (Ctrl+C),
-        <code>\r</code>, <code>\t</code>, <code>\x1b</code>… Ví dụ <code>\e[A</code> là mũi tên lên.
+        Customise any key. The sequence it sends understands <code>\e</code> (ESC), <code>^C</code> (Ctrl+C),
+        <code>\r</code>, <code>\t</code>, <code>\x1b</code> and so on. For example <code>\e[A</code> is arrow up.
       </p>
       <div class="row">
-        <span class="row__label">Nhóm</span>
+        <span class="row__label">Group</span>
         <select id="keyGroupSelect" style="width:auto;min-width:150px"></select>
       </div>
       <div id="keyEditor" style="margin-top:10px"></div>
       <div class="btn-group" style="margin-top:10px">
-        <button class="btn" id="btnKeyAdd">+ Thêm phím</button>
-        <button class="btn" id="btnKeyGroupAdd">+ Thêm nhóm</button>
-        <button class="btn btn--danger" id="btnKeyGroupDel">Xóa nhóm</button>
+        <button class="btn" id="btnKeyAdd">+ Add key</button>
+        <button class="btn" id="btnKeyGroupAdd">+ Add group</button>
+        <button class="btn btn--danger" id="btnKeyGroupDel">Delete group</button>
       </div>
       <div class="btn-group" style="margin-top:8px">
-        <button class="btn" id="btnKeyExport">Xuất JSON</button>
-        <button class="btn" id="btnKeyImport">Nhập JSON</button>
-        <button class="btn btn--danger" id="btnKeyReset">Khôi phục mặc định</button>
+        <button class="btn" id="btnKeyExport">Export JSON</button>
+        <button class="btn" id="btnKeyImport">Import JSON</button>
+        <button class="btn btn--danger" id="btnKeyReset">Reset to defaults</button>
       </div>
     </section>
 
   </div>
   <div class="dialog__foot">
-    <button class="btn btn--primary" id="btnSettingsSave">Lưu &amp; áp dụng</button>
+    <button class="btn btn--primary" id="btnSettingsSave">Save &amp; apply</button>
   </div>
 </dialog>
 
 <dialog id="renameDialog">
   <form method="dialog" id="renameForm">
-    <div class="dialog__head"><h2>Đổi tên phiên</h2></div>
+    <div class="dialog__head"><h2>Rename session</h2></div>
     <div class="dialog__body">
       <input type="text" id="renameInput" maxlength="48" autocapitalize="none" autocomplete="off" spellcheck="false" placeholder="vd: web-server, db, log">
-      <p class="hint">Tên này thay cho tiêu đề shell tự sinh, và hiện ở cả bảng quản trị.</p>
+      <p class="hint">This replaces the shell-generated title, and shows in the admin panel too.</p>
     </div>
     <div class="dialog__foot">
-      <button class="btn" value="cancel" type="submit">Hủy</button>
-      <button class="btn btn--primary" value="ok" type="submit" id="btnRenameOk">Lưu</button>
+      <button class="btn" value="cancel" type="submit">Cancel</button>
+      <button class="btn btn--primary" value="ok" type="submit" id="btnRenameOk">Save</button>
     </div>
   </form>
 </dialog>
@@ -267,8 +281,8 @@
     <p class="hint" id="jsonHint"></p>
   </div>
   <div class="dialog__foot">
-    <button class="btn" id="btnJsonCancel">Đóng</button>
-    <button class="btn btn--primary" id="btnJsonOk">Áp dụng</button>
+    <button class="btn" id="btnJsonCancel">Close</button>
+    <button class="btn btn--primary" id="btnJsonOk">Apply</button>
   </div>
 </dialog>
 

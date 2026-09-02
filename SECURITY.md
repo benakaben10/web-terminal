@@ -51,6 +51,24 @@ detected secret.
 
 CI does **not** fail on CVEs inside third-party release binaries — `terraform`,
 `helm`, `k9s`, `kubectl`, the Docker CLI and the rest carry whatever Go standard
-library their vendor compiled them against. Nothing in this repository can patch
-those; the only remedy is a vendor release, which the pinned version arguments in
-the Dockerfile make easy to take. They are still scanned and still reported.
+library their vendor compiled them against. They are still scanned and still
+reported.
+
+A scanner reports these as `golang / stdlib / 1.25.8`, `golang.org/x/crypto /
+0.49.0` and so on, which reads like the image is carrying an old Go. It is not:
+the toolchain here is current, and each of those versions is statically linked
+*inside* one vendor's prebuilt binary. Upgrading the Go installed in the image
+changes none of them, because nothing recompiles those binaries.
+
+There are only three real remedies, in order of preference:
+
+1. **Bump the tool.** Vendors rebuild against a patched Go eventually. Every tool
+   is a pinned build argument in the Dockerfile, so taking a new release is a
+   one-line change.
+2. **Drop the tool.** A convenience that carries dozens of CVEs may not be worth
+   its surface on a bastion.
+3. **Rebuild it from source** with the current toolchain. This does fix `stdlib`
+   findings, but not module ones — `go install tool@version` honours that
+   module's own `go.mod`, so a pinned vulnerable `x/crypto` stays pinned unless
+   the module is forked and patched. It also replaces a vendor-signed release
+   artifact with a locally built one, which is its own trade-off.

@@ -97,7 +97,7 @@ alias reload='source ~/.zshrc'
 
 # Stops the *container* (SIGTERM to PID 1), not the host.
 alias poweroff='kill 1'
-alias reboot='echo "Không hỗ trợ trong container. Dùng: docker restart <container>"'
+alias reboot='echo "Not supported inside a container. Use: docker restart <container>"'
 
 # ------------------------------------------------------------------- prompt
 # Anything installed with `go install` lands in $GOPATH/bin, which is inside

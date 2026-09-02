@@ -19,6 +19,7 @@
   --key-shadow: 0 1px 0 rgba(0, 0, 0, 0.5);
   --radius: 10px;
   --radius-sm: 7px;
+  --pane-head: 24px;
   --topbar-h: 48px;
   --tabbar-h: 38px;
   --font-ui: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
@@ -135,6 +136,7 @@ button { cursor: pointer; background: none; border: none; }
 }
 .iconbtn:active { background: var(--bg-elev-2); }
 .iconbtn[aria-pressed="true"] { background: var(--accent-soft); color: var(--accent); }
+.iconbtn[hidden] { display: none; }
 
 .status-dot {
   flex: 0 0 auto;
@@ -231,6 +233,108 @@ button { cursor: pointer; background: none; border: none; }
 }
 
 #terminal { width: 100%; height: 100%; }
+
+/* Split panes. The separator is drawn inside the pane rather than as a gap, so
+   the terminals keep every column the layout gives them. */
+.pane--split { box-shadow: inset 0 0 0 1px var(--border); }
+.pane--focused { box-shadow: inset 0 0 0 1px var(--accent); }
+
+/* The control layer sits over the grid and is transparent to the pointer; only
+   the controls themselves take clicks, so dragging and selecting still reach
+   the terminal underneath. */
+.pane-ctls { position: absolute; inset: 0; pointer-events: none; z-index: 3; }
+.pane-ctls[hidden] { display: none; }
+
+.pane-ctl { position: absolute; }
+
+/* A header per pane: which shell this is, which shell to swap in, and a way to
+   open another. The terminal below it is inset by the same height, so the strip
+   never covers a line of output. */
+.pane-head {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: var(--pane-head);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 4px 0 8px;
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  font-size: 11.5px;
+  color: var(--fg-dim);
+  pointer-events: auto;
+}
+.pane-head--focused {
+  background: var(--bg-elev-2);
+  color: var(--fg);
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+.pane-head__title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+}
+
+.pane-head__pick {
+  flex: 0 0 auto;
+  max-width: 116px;
+  height: 18px;
+  padding: 0 2px;
+  font-size: 11px;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg-dim);
+  border: 1px solid var(--border);
+}
+
+.pane-head__add {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg-dim);
+  border: 1px solid var(--border);
+}
+.pane-head__add:hover { color: var(--accent); border-color: var(--accent); }
+
+.pane-head__close {
+  flex: 0 0 auto;
+  width: 18px;
+  height: 18px;
+  display: grid;
+  place-items: center;
+  font-size: 11px;
+  line-height: 1;
+  border-radius: var(--radius-sm);
+  background: var(--bg);
+  color: var(--fg-dim);
+  border: 1px solid var(--border);
+}
+.pane-head__close:hover { color: var(--danger); border-color: var(--danger); }
+
+/* An empty pane is nothing but its own invitation to fill it. */
+.pane-ctl__empty {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-size: 13px;
+  color: var(--fg-faint);
+  background: var(--bg);
+  box-shadow: inset 0 0 0 1px var(--border);
+  pointer-events: auto;
+}
+.pane-ctl__empty:hover { color: var(--accent); }
 #terminal .xterm { padding: 4px 6px; height: 100%; }
 .xterm-viewport::-webkit-scrollbar { width: 6px; }
 .xterm-viewport::-webkit-scrollbar-thumb { background: var(--border); border-radius: 3px; }
@@ -524,6 +628,10 @@ button { cursor: pointer; background: none; border: none; }
   letter-spacing: 0.07em;
   color: var(--fg-faint);
 }
+
+/* `display: flex` on a class outranks the UA stylesheet's [hidden], so a row
+   hidden from script needs this to actually disappear. */
+.row[hidden] { display: none; }
 
 .row {
   display: flex;

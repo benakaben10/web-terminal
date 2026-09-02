@@ -97,11 +97,21 @@ LABEL org.opencontainers.image.title="web-terminal" \
 # where every Node-side CVE in this image came from. The build stage keeps its
 # own npm; this is the runtime.
 #
+# python3-pip is left out for the same reason. It drags in setuptools and wheel,
+# which Ubuntu 24.04 ships at versions with no fixed release available, and they
+# accounted for the highest-severity findings in the image. uv is installed
+# below and covers the same ground with `uv pip`.
+#
+# apt-get upgrade matters: packages inherited from the base layer that are never
+# named in the install list below would otherwise stay at whatever version the
+# base image was published with.
+#
 # python3 is installed here rather than left to the bootstrap on purpose: the
 # bootstrap asks apt for a package literally named "python", which does not
 # exist on Ubuntu 24.04, and it skips the tool cleanly once python3 is already
 # on PATH ("supplied by the system outside the managed package database").
 RUN apt-get update && \
+    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
       tini zsh bash sudo \
       ca-certificates tzdata ncurses-base ncurses-term \
@@ -110,7 +120,7 @@ RUN apt-get update && \
       vim nano less tree jq unzip tar xz-utils \
       htop tmux ncdu \
       dnsutils iputils-ping iproute2 net-tools \
-      python3 python3-pip && \
+      python3 && \
     rm -rf /var/lib/apt/lists/* && \
     rm -rf /usr/lib/node_modules/npm /usr/bin/npm /usr/bin/npx
 

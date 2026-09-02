@@ -1,7 +1,7 @@
 {
   "name": "Web Terminal",
   "short_name": "Terminal",
-  "description": "Web terminal quản trị với zsh + oh-my-zsh, tối ưu cho điện thoại",
+  "description": "Mobile-first web terminal with zsh + oh-my-zsh",
   "start_url": ".",
   "scope": ".",
   "display": "standalone",

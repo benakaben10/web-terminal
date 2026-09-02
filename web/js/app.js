@@ -76,6 +76,8 @@
     autoReconnect: true,
     bell: false,
     keybarVisible: true,
+    // Desktop only; see the panes section. 1 | 2 | 4.
+    paneLayout: 1,
     keybarGroup: 'nav',
     // Touch devices are exactly the ones whose keyboards need a composing
     // region (Telex/VNI, kana, pinyin), so default the composer on there.
@@ -458,7 +460,7 @@
     tmuxCopy.active = false;
     term.write('\x1b[?1049l\x1b[?1000l\x1b[?1002l\x1b[?1003l\x1b[?1006l\x1b[?25h');
     updateScrollButton();
-    toast(stuck ? 'Đã thoát chế độ toàn màn hình' : 'Màn hình đã ở chế độ thường', 'ok');
+    toast(stuck ? 'Left full-screen mode' : 'Screen was already in normal mode', 'ok');
   }
 
   /**
@@ -741,7 +743,9 @@
     const wrap = $('termWrap');
     let rest = 0;
     wrap.addEventListener('wheel', (event) => {
-      const tab = activeTab;
+      // In a grid the wheel belongs to whatever is under the pointer; expecting
+      // a click first would make scrolling a second terminal a two-step affair.
+      const tab = (paneCount() > 1 ? tabFromNode(event.target) : null) || activeTab;
       if (!tab || event.ctrlKey) return; // ctrl+wheel is the browser's zoom
 
       const cell = cellSize(tab.term).h;
@@ -948,6 +952,7 @@
       this.term.onTitleChange((title) => {
         this.title = title;
         if (activeTab === this) updateTopbar();
+        if (paneCount() > 1) renderPaneControls();
       });
       this.term.onBell(() => { if (settings.bell) haptic(30); });
       this.term.onSelectionChange(() => {
@@ -1049,12 +1054,12 @@
         this.socket = null;
         if (activeTab === this) setStatus('offline');
         if (event.code === 4003 || event.code === 4029) {
-          showOverlay('Không mở được phiên', event.reason || 'Máy chủ từ chối yêu cầu.');
+          showOverlay('Could not open a session', event.reason || 'The server refused the request.');
           return;
         }
         if (this.dead) return;
         if (settings.autoReconnect) this.#scheduleReconnect();
-        else if (activeTab === this) showOverlay('Mất kết nối', 'Nhấn để kết nối lại.');
+        else if (activeTab === this) showOverlay('Disconnected', 'Tap to reconnect.');
       };
 
       socket.onerror = () => { /* onclose does the recovery */ };
@@ -1079,9 +1084,9 @@
           break;
         case 'exit':
           this.dead = true;
-          this.term.write(`\r\n\x1b[90m[phiên kết thúc — mã ${msg.exitCode ?? '?'}]\x1b[0m\r\n`);
+          this.term.write(`\r\n\x1b[90m[session ended - exit ${msg.exitCode ?? '?'}]\x1b[0m\r\n`);
           renderTabs();
-          if (activeTab === this) showOverlay('Phiên đã kết thúc', 'Shell đã thoát. Mở phiên mới để tiếp tục.');
+          if (activeTab === this) showOverlay('Session ended', 'The shell exited. Open a new session to carry on.');
           break;
         case 'error':
           if (msg.code === 'session_gone') {
@@ -1100,7 +1105,7 @@
       this.reconnectAttempt++;
       const delay = Math.min(15000, 500 * 2 ** Math.min(this.reconnectAttempt, 5));
       if (activeTab === this) {
-        showOverlay('Đang kết nối lại…', `Thử lại sau ${Math.round(delay / 1000)}s (lần ${this.reconnectAttempt}).`);
+        showOverlay('Reconnecting…', `Retrying in ${Math.round(delay / 1000)}s (attempt ${this.reconnectAttempt}).`);
       }
       clearTimeout(this.reconnectTimer);
       this.reconnectTimer = setTimeout(() => this.connect(), delay);
@@ -1149,7 +1154,6 @@
       this.container.style.pointerEvents = 'auto';
       // Fit after the browser has laid the container out, not before.
       requestAnimationFrame(() => this.resize(true));
-      focusInput();
     }
 
     hide() {
@@ -1207,20 +1211,226 @@
   function newTab(opts) {
     const tab = new TerminalTab(opts);
     tabs.push(tab);
-    activate(tab);
+    if (Number.isInteger(opts?.pane)) {
+      panes[opts.pane] = tab;
+      activePane = opts.pane;
+      activeTab = tab;
+      renderPanes();
+      reflectActiveTab();
+      focusInput();
+    } else if (opts?.background) renderPanes();
+    else activate(tab);
     tab.connect();
     renderTabs();
     return tab;
   }
 
-  function activate(tab) {
-    if (activeTab === tab) return;
-    leaveTmuxCopyMode();
-    activeTab?.hide();
+  /**
+   * Open shells until every pane has one.
+   *
+   * A grid the user just asked for should arrive full. Laying out four panes and
+   * leaving three of them empty, waiting to be filled from the tab bar by hand,
+   * is not the thing anybody pressed the button for.
+   */
+  function fillPanes() {
+    for (let i = tabs.length; i < paneCount(); i++) newTab({ background: true });
+  }
+
+  /** Switch the grid and keep the toolbar button, the panes and the ptys in step. */
+  function setPaneLayout(n) {
+    settings.paneLayout = PANE_RECTS[n] ? n : 1;
+    saveSettings();
+    fillPanes();
+    renderPanes();
+    for (const tab of visibleTabs()) tab.resize(true);
+    $('btnPanes').setAttribute('aria-pressed', String(paneCount() > 1));
+    focusInput();
+  }
+
+  /* ------------------------------------------------------------------ panes
+   *
+   * A desktop window has room for more than one terminal, so it can show two or
+   * four side by side. A phone does not: a quarter of a phone screen is too few
+   * columns for anything to line up, and the hotkey bar and IME field assume one
+   * terminal has the screen. So the whole feature is off on touch devices, and
+   * the setting is not even offered there.
+   *
+   * Every tab already owns a container that fills #terminal absolutely, with
+   * only the active one visible. A grid is therefore just a matter of giving
+   * each visible container a quadrant instead of the whole box — xterm, the
+   * sockets and the tab list are untouched.
+   */
+
+  const PANE_RECTS = {
+    1: [['0%', '0%', '100%', '100%']],
+    2: [['0%', '0%', '50%', '100%'], ['50%', '0%', '50%', '100%']],
+    4: [['0%', '0%', '50%', '50%'], ['50%', '0%', '50%', '50%'],
+        ['0%', '50%', '50%', '50%'], ['50%', '50%', '50%', '50%']],
+  };
+
+  let panes = [];      // one tab per pane, in pane order; holes are null
+  let activePane = 0;
+
+  /** Layouts are stored per browser, so a desktop choice must not reach a phone. */
+  function paneCount() {
+    if (IS_TOUCH) return 1;
+    return PANE_RECTS[settings.paneLayout] ? settings.paneLayout : 1;
+  }
+
+  function tabFromNode(node) {
+    return tabs.find((tab) => tab.container.contains(node)) || null;
+  }
+
+  /** Tabs currently on screen, for the callers that must touch all of them. */
+  function visibleTabs() {
+    return paneCount() === 1 ? (activeTab ? [activeTab] : []) : panes.filter(Boolean);
+  }
+
+  /** Resolve the panes array: drop stale entries, then fill holes from tabs. */
+  function assignPanes() {
+    const n = paneCount();
+    panes.length = n;
+    const seen = new Set();
+    for (let i = 0; i < n; i++) {
+      const tab = panes[i];
+      if (!tab || !tabs.includes(tab) || seen.has(tab)) panes[i] = null;
+      else seen.add(tab);
+    }
+    if (activeTab && !seen.has(activeTab)) {
+      const slot = panes.indexOf(null);
+      const at = slot >= 0 ? slot : 0;
+      panes[at] = activeTab;
+      seen.add(activeTab);
+      activePane = at;
+    }
+    for (const tab of tabs) {
+      if (seen.has(tab)) continue;
+      const slot = panes.indexOf(null);
+      if (slot < 0) break;
+      panes[slot] = tab;
+      seen.add(tab);
+    }
+    if (!panes[activePane]) {
+      const first = panes.findIndex(Boolean);
+      activePane = first < 0 ? 0 : first;
+    }
+  }
+
+  /** Position the visible tabs, hide the rest. */
+  function renderPanes() {
+    const n = paneCount();
+    assignPanes();
+    const rects = PANE_RECTS[n];
+    for (const tab of tabs) {
+      const index = n === 1 ? (tab === activeTab ? 0 : -1) : panes.indexOf(tab);
+      if (index < 0) { tab.hide(); continue; }
+      const [left, top, width, height] = rects[index];
+      const head = n > 1 ? 'var(--pane-head)' : '0px';
+      Object.assign(tab.container.style, {
+        inset: 'auto',
+        left,
+        width,
+        top: `calc(${top} + ${head})`,
+        height: `calc(${height} - ${head})`,
+      });
+      tab.container.classList.toggle('pane--split', n > 1);
+      tab.container.classList.toggle('pane--focused', n > 1 && tab === activeTab);
+      tab.show();
+    }
+    $('terminal').dataset.panes = String(n);
+    renderPaneControls();
+  }
+
+  /** Put a tab in a pane. If it is already on screen the two panes trade places. */
+  function swapIntoPane(index, tab) {
+    if (!tab) return;
+    const other = panes.indexOf(tab);
+    if (other >= 0 && other !== index) panes[other] = panes[index];
+    panes[index] = tab;
+    activePane = index;
     activeTab = tab;
-    tab.show();
+    renderPanes();
+    reflectActiveTab();
+    focusInput();
+  }
+
+  /**
+   * The header strip on each pane: which shell it is, a picker to swap another
+   * one in, and a `+` that opens a new one right here. An empty pane gets the
+   * whole square as a button instead, since there is nothing else to look at.
+   */
+  function renderPaneControls() {
+    const host = $('paneCtls');
+    const n = paneCount();
+    host.textContent = '';
+    host.hidden = n === 1;
+    if (n === 1) return;
+
+    PANE_RECTS[n].forEach(([left, top, width, height], index) => {
+      const cell = el('div', 'pane-ctl');
+      Object.assign(cell.style, { left, top, width, height });
+      const tab = panes[index] || null;
+
+      if (!tab) {
+        const empty = el('button', 'pane-ctl__empty', '+  New terminal');
+        empty.addEventListener('click', () => newTab({ pane: index }));
+        cell.appendChild(empty);
+        host.appendChild(cell);
+        return;
+      }
+
+      const head = el('div', 'pane-head');
+      head.classList.toggle('pane-head--focused', index === activePane);
+      head.addEventListener('mousedown', () => focusPaneOf(tab));
+      head.appendChild(el('span', 'pane-head__title', tab.label));
+
+      const pick = el('select', 'pane-head__pick');
+      pick.title = 'Show another session in this pane';
+      tabs.forEach((candidate, i) => {
+        const option = el('option', null, `${i + 1} ${candidate.label}`);
+        option.value = String(i);
+        option.selected = candidate === tab;
+        pick.appendChild(option);
+      });
+      pick.addEventListener('change', () => swapIntoPane(index, tabs[Number(pick.value)]));
+      head.appendChild(pick);
+
+      const add = el('button', 'pane-head__add', '+');
+      add.title = 'Open a new session in this pane';
+      add.addEventListener('click', () => newTab({ pane: index }));
+      head.appendChild(add);
+
+      // Closes the session, exactly as the tab bar's cross does. A pane that
+      // ends up empty offers to open another; assignPanes backfills it first
+      // if some tab is off screen.
+      const close = el('button', 'pane-head__close', '✕');
+      close.title = 'Close this session';
+      close.addEventListener('click', () => closeTab(tab));
+      head.appendChild(close);
+
+      cell.appendChild(head);
+      host.appendChild(cell);
+    });
+  }
+
+  /** Move focus to the pane a tab already occupies, without moving the tab. */
+  function focusPaneOf(tab) {
+    const index = panes.indexOf(tab);
+    if (index < 0 || tab === activeTab) return false;
+    leaveTmuxCopyMode();
+    activePane = index;
+    activeTab = tab;
+    renderPanes();
+    reflectActiveTab();
+    return true;
+  }
+
+  /** Everything that follows a change of which tab has the keyboard. */
+  function reflectActiveTab() {
+    const tab = activeTab;
+    if (!tab) return;
     if (tab.socket?.readyState === 1) { setStatus('online'); hideOverlay(); }
-    else if (tab.dead) showOverlay('Phiên đã kết thúc', 'Shell đã thoát. Mở phiên mới để tiếp tục.');
+    else if (tab.dead) showOverlay('Session ended', 'The shell exited. Open a new session to carry on.');
     else setStatus('connecting');
     updateTopbar();
     renderTabs();
@@ -1229,18 +1439,33 @@
     persistTabs();
   }
 
+  function activate(tab) {
+    if (activeTab === tab) return;
+    // Already on screen elsewhere: focus it rather than cloning it into a
+    // second pane, which is what a split window manager does.
+    if (paneCount() > 1 && panes.includes(tab)) { focusPaneOf(tab); focusInput(); return; }
+    leaveTmuxCopyMode();
+    if (paneCount() > 1) panes[activePane] = tab;
+    activeTab = tab;
+    renderPanes();
+    focusInput();
+    reflectActiveTab();
+  }
+
   function closeTab(tab) {
     const index = tabs.indexOf(tab);
     if (index < 0) return;
     if (tab.sid) api(`/api/sessions/${tab.sid}`, { method: 'DELETE' }).catch(() => {});
     tab.dispose();
     tabs.splice(index, 1);
+    panes = panes.map((t) => (t === tab ? null : t));
     persistTabs();
     if (activeTab === tab) {
       activeTab = null;
       if (tabs.length) activate(tabs[Math.max(0, index - 1)]);
       else newTab({});
     }
+    renderPanes();
     renderTabs();
   }
 
@@ -1406,14 +1631,14 @@
     lastCopied = text;
     try {
       await navigator.clipboard.writeText(text);
-      if (!silent) toast('Đã chép', 'ok');
+      if (!silent) toast('Copied', 'ok');
       return;
     } catch { /* no secure context, or permission refused */ }
     if (copyFallback(text)) {
-      if (!silent) toast('Đã chép', 'ok');
+      if (!silent) toast('Copied', 'ok');
     } else if (!silent) {
       // Still usable: the text is held in `lastCopied` for the paste key.
-      toast('Đã chép (chỉ trong app)', 'ok');
+      toast('Copied (inside this app only)', 'ok');
     }
   }
 
@@ -1422,7 +1647,7 @@
     try {
       text = (await navigator.clipboard.readText()) || '';
     } catch {
-      text = lastCopied || prompt('Dán nội dung vào đây:') || '';
+      text = lastCopied || prompt('Paste the text here:') || '';
     }
     if (!text || !activeTab) return;
     // Through xterm rather than straight down the socket, so bracketed paste is
@@ -1545,7 +1770,7 @@
     saveSettings();
     $('keybar').hidden = !visible;
     $('btnKeybar').setAttribute('aria-pressed', String(visible));
-    activeTab?.resize(true);
+    for (const tab of visibleTabs()) tab.resize(true);
   }
 
   function setFontSize(size) {
@@ -1590,9 +1815,9 @@
 
       clearTimeout(viewportSettle);
       viewportSettle = setTimeout(() => {
-        // Only the tab on screen. A hidden one is refitted by show(), and
+        // Only the tabs on screen. A hidden one is refitted by show(), and
         // resizing it here would SIGWINCH a shell nobody is looking at.
-        activeTab?.resize(true);
+        for (const tab of visibleTabs()) tab.resize(true);
       }, 140);
     });
   }
@@ -1650,23 +1875,23 @@
     const host = $('sysInfo');
     host.textContent = '';
     host.appendChild(infoRow('Hostname', info.hostname));
-    host.appendChild(infoRow('Hệ điều hành', `${info.platform} (${info.arch})`));
-    host.appendChild(infoRow('CPU', `${info.cpus} nhân`));
+    host.appendChild(infoRow('Operating system', `${info.platform} (${info.arch})`));
+    host.appendChild(infoRow('CPU', `${info.cpus} cores`));
     host.appendChild(infoRow('Load', info.loadavg.map((n) => n.toFixed(2)).join(' ')));
     host.appendChild(infoRow('Uptime', fmtDuration(info.uptime)));
     host.appendChild(meterRow('RAM', info.memory.used, info.memory.total));
-    if (info.disk) host.appendChild(meterRow('Ổ đĩa /', info.disk.used, info.disk.total));
+    if (info.disk) host.appendChild(meterRow('Disk /', info.disk.used, info.disk.total));
 
     // Scroll diagnostics — read these right after dragging on the terminal.
     const term = activeTab?.term;
     if (term) {
       const buf = term.buffer.active;
       const cell = cellSize(term);
-      host.appendChild(infoRow('Cuộn: đích', `${buf.type} → ${diag.mode}${tmuxCopy.active ? ' · tmux copy-mode' : ''}`));
-      host.appendChild(infoRow('Cuộn: vị trí', `${buf.viewportY} / ${buf.baseY} · ${term.rows}×${term.cols}`));
-      host.appendChild(infoRow('Cuộn: cell', `${cell.h.toFixed(1)}px`));
-      host.appendChild(infoRow('Cuộn: chuột', `${term.modes.mouseTrackingMode} · ${diag.wheel} wheel`));
-      host.appendChild(infoRow('Cuộn: đã nhận', `${diag.moves} move · ${diag.lines} dòng · ${diag.keys} phím`));
+      host.appendChild(infoRow('Scroll: target', `${buf.type} → ${diag.mode}${tmuxCopy.active ? ' · tmux copy-mode' : ''}`));
+      host.appendChild(infoRow('Scroll: position', `${buf.viewportY} / ${buf.baseY} · ${term.rows}×${term.cols}`));
+      host.appendChild(infoRow('Scroll: cell', `${cell.h.toFixed(1)}px`));
+      host.appendChild(infoRow('Scroll: mouse', `${term.modes.mouseTrackingMode} · ${diag.wheel} wheel`));
+      host.appendChild(infoRow('Scroll: received', `${diag.moves} moves · ${diag.lines} lines · ${diag.keys} keys`));
     }
   }
 
@@ -1674,7 +1899,7 @@
     const host = $('sessionList');
     host.textContent = '';
     if (!list.length) {
-      host.appendChild(el('p', 'hint', 'Chưa có phiên nào.'));
+      host.appendChild(el('p', 'hint', 'No sessions yet.'));
       return;
     }
     for (const s of list) {
@@ -1684,11 +1909,11 @@
       item.appendChild(dot);
       const meta = el('div', 'session-item__meta');
       meta.appendChild(el('span', null, s.title || s.name));
-      meta.appendChild(el('small', null, `${s.id} · pid ${s.pid ?? '—'} · ${s.cols}×${s.rows} · ${s.clients} kết nối`));
+      meta.appendChild(el('small', null, `${s.id} · pid ${s.pid ?? '—'} · ${s.cols}×${s.rows} · ${s.clients} client(s)`));
       item.appendChild(meta);
 
       const rename = el('button', 'btn', '✎');
-      rename.setAttribute('aria-label', 'Đổi tên phiên');
+      rename.setAttribute('aria-label', 'Rename session');
       rename.addEventListener('click', async () => {
         const name = await askText(s.name, 'vd: web-server');
         if (!name) return;
@@ -1702,7 +1927,7 @@
       });
       item.appendChild(rename);
 
-      const attach = el('button', 'btn', 'Mở');
+      const attach = el('button', 'btn', 'Open');
       attach.addEventListener('click', () => {
         const existing = tabs.find((t) => t.sid === s.id);
         if (existing) activate(existing);
@@ -1713,7 +1938,7 @@
 
       const kill = el('button', 'btn btn--danger', '✕');
       kill.addEventListener('click', async () => {
-        if (!confirm(`Kết thúc phiên ${s.id}?`)) return;
+        if (!confirm(`Kill session ${s.id}?`)) return;
         try {
           await api(`/api/sessions/${s.id}`, { method: 'DELETE' });
           const open = tabs.find((t) => t.sid === s.id);
@@ -1736,6 +1961,8 @@
     editingGroupId = editingLayout.find((g) => g.id === settings.keybarGroup)?.id || editingLayout[0]?.id;
     $('fontValue').textContent = String(settings.fontSize);
     $('themeSelect').value = settings.theme;
+    $('rowPaneLayout').hidden = IS_TOUCH;
+    $('optPaneLayout').value = String(paneCount());
     $('optCursorBlink').checked = settings.cursorBlink;
     $('optWrapKeys').checked = settings.wrapKeys;
     $('optHaptics').checked = settings.haptics;
@@ -1775,7 +2002,7 @@
       label.className = 'keyedit__label';
       label.type = 'text';
       label.value = key.label;
-      label.placeholder = 'Nhãn';
+      label.placeholder = 'Label';
       label.addEventListener('input', () => { key.label = label.value; });
       row.appendChild(label);
 
@@ -1791,7 +2018,7 @@
         seq.disabled = true;
       } else {
         seq.value = window.WTKeys.formatSequence(key.seq || '');
-        seq.placeholder = 'Chuỗi gửi, vd \\e[A';
+        seq.placeholder = 'Sequence, e.g. \\e[A';
         seq.addEventListener('input', () => { key.seq = window.WTKeys.parseSequence(seq.value); });
       }
       row.appendChild(seq);
@@ -1814,6 +2041,7 @@
 
   function commitSettings() {
     settings.theme = $('themeSelect').value;
+    settings.paneLayout = Number($('optPaneLayout').value) || 1;
     settings.cursorBlink = $('optCursorBlink').checked;
     settings.wrapKeys = $('optWrapKeys').checked;
     settings.haptics = $('optHaptics').checked;
@@ -1838,6 +2066,7 @@
 
     applyChrome();
     for (const tab of tabs) tab.applySettings();
+    setPaneLayout(settings.paneLayout);
     renderKeybarTabs();
     renderKeyRows();
     applyInputBar();
@@ -1886,6 +2115,13 @@
     setupIME();
     setupTouchGestures();
     setupWheelScroll();
+
+    // Capture phase: xterm stops the event once it has taken the click.
+    $('terminal').addEventListener('mousedown', (event) => {
+      if (paneCount() === 1) return;
+      const tab = tabFromNode(event.target);
+      if (tab) focusPaneOf(tab);
+    }, true);
     bindHoldGestures();
     bindReleaseSafety();
     $('btnMenu').addEventListener('click', openPanel);
@@ -1914,6 +2150,10 @@
       activeTab.reconnectAttempt = 0;
       activeTab?.connect();
     });
+    $('btnPanes').hidden = IS_TOUCH;
+    $('btnPanes').setAttribute('aria-pressed', String(paneCount() > 1));
+    $('btnPanes').addEventListener('click', () => setPaneLayout(paneCount() > 1 ? 1 : 4));
+
     $('btnScrollBottom').addEventListener('click', () => {
       leaveTmuxCopyMode();
       activeTab?.term.scrollToBottom();
@@ -1949,7 +2189,7 @@
       renderKeyEditor();
     });
     $('btnKeyGroupAdd').addEventListener('click', () => {
-      const label = prompt('Tên nhóm phím:');
+      const label = prompt('Group name:');
       if (!label) return;
       const id = `g-${Date.now()}`;
       editingLayout.push({ id, label, keys: [{ id: `${id}-0`, label: 'Key', kind: 'key', seq: '' }] });
@@ -1958,25 +2198,25 @@
       renderKeyEditor();
     });
     $('btnKeyGroupDel').addEventListener('click', () => {
-      if (editingLayout.length <= 1) return toast('Phải giữ ít nhất 1 nhóm', 'error');
+      if (editingLayout.length <= 1) return toast('At least one group is required', 'error');
       editingLayout = editingLayout.filter((g) => g.id !== editingGroupId);
       editingGroupId = editingLayout[0].id;
       renderKeyGroupSelect();
       renderKeyEditor();
     });
     $('btnKeyExport').addEventListener('click', () => {
-      openJSONDialog('Xuất bố cục phím', JSON.stringify(editingLayout, null, 2), 'Sao chép để sao lưu hoặc dùng ở máy khác.', () => true);
+      openJSONDialog('Export key layout', JSON.stringify(editingLayout, null, 2), 'Copy this to back it up, or to move it to another machine.', () => true);
     });
     $('btnKeyImport').addEventListener('click', () => {
-      openJSONDialog('Nhập bố cục phím', '', 'Dán JSON đã xuất trước đó.', (text) => {
+      openJSONDialog('Import key layout', '', 'Paste JSON exported earlier.', (text) => {
         try {
           const parsed = window.WTKeys.sanitize(JSON.parse(text));
-          if (!parsed) throw new Error('JSON không hợp lệ');
+          if (!parsed) throw new Error('Invalid JSON');
           editingLayout = parsed;
           editingGroupId = parsed[0].id;
           renderKeyGroupSelect();
           renderKeyEditor();
-          toast('Đã nhập bố cục', 'ok');
+          toast('Layout imported', 'ok');
           return true;
         } catch (err) {
           toast(err.message, 'error');
@@ -1985,7 +2225,7 @@
       });
     });
     $('btnKeyReset').addEventListener('click', () => {
-      if (!confirm('Khôi phục bố cục phím mặc định?')) return;
+      if (!confirm('Reset the key layout to defaults?')) return;
       editingLayout = window.WTKeys.clone(window.WTKeys.DEFAULT_LAYOUT);
       editingGroupId = editingLayout[0].id;
       renderKeyGroupSelect();
@@ -2004,7 +2244,7 @@
         $('login').hidden = true;
         boot();
       } catch {
-        $('loginError').textContent = 'Sai tài khoản hoặc mật khẩu.';
+        $('loginError').textContent = 'Wrong username or password.';
         haptic(40);
       }
     });
@@ -2041,6 +2281,7 @@
 
     if (!alive.length) {
       newTab({});
+      fillPanes();
       return;
     }
 
@@ -2060,14 +2301,15 @@
     const wanted = tabs.find((t) => t.sid === prefs.active) || tabs[0];
     activate(wanted);
     for (const tab of tabs) tab.connect();
+    fillPanes();
     renderTabs();
     persistTabs();
 
     const extra = alive.filter((s) => !rank.has(s.id)).length;
     toast(
       extra
-        ? `Đã khôi phục ${alive.length} phiên (${extra} phiên mở từ nơi khác)`
-        : `Đã khôi phục ${alive.length} phiên`,
+        ? `Restored ${alive.length} session(s), ${extra} of them opened elsewhere`
+        : `Restored ${alive.length} session(s)`,
       'ok'
     );
   }

@@ -61,7 +61,7 @@
   const DEFAULT_LAYOUT = [
     {
       id: 'nav',
-      label: 'Điều hướng',
+      label: 'Navigation',
       keys: [
         mod('ctrl', 'Ctrl'),
         mod('alt', 'Alt'),
@@ -79,7 +79,7 @@
     },
     {
       id: 'combo',
-      label: 'Tổ hợp Ctrl',
+      label: 'Ctrl combos',
       keys: [
         ctrl('c'),
         ctrl('d'),
@@ -102,7 +102,7 @@
     },
     {
       id: 'symbols',
-      label: 'Ký tự',
+      label: 'Symbols',
       keys: [
         k('sym-slash', '/', '/'),
         k('sym-bslash', '\\', '\\'),
@@ -138,14 +138,14 @@
     },
     {
       id: 'fn',
-      label: 'Phím chức năng',
+      label: 'Function keys',
       keys: Array.from({ length: 12 }, (_, i) =>
         k('f' + (i + 1), 'F' + (i + 1), SEQUENCES['f' + (i + 1)])
       ),
     },
     {
       id: 'macro',
-      label: 'Lệnh nhanh',
+      label: 'Quick commands',
       // No trailing \r on purpose: a quick command types itself at the prompt
       // and waits there, so a mistap costs a backspace rather than a command
       // that already ran. Add `\r` in the editor for one that should fire.
@@ -156,11 +156,11 @@
         k('m-df', 'df -h', 'df -h'),
         k('m-cdup', 'cd ..', 'cd ..'),
         k('m-git', 'git status', 'git status'),
-        act('keyboard', 'Bàn phím', '⌨'),
-        act('normalScreen', 'Sửa màn hình', '⛶'),
-        act('paste', 'Dán', '📋'),
-        act('copy', 'Chép', '⧉'),
-        act('inputBar', 'Ô nhập', '✎'),
+        act('keyboard', 'Keyboard', '⌨'),
+        act('normalScreen', 'Fix screen', '⛶'),
+        act('paste', 'Paste', '📋'),
+        act('copy', 'Copy', '⧉'),
+        act('inputBar', 'Input bar', '✎'),
       ],
     },
   ];
@@ -184,7 +184,7 @@
       .filter((g) => g && typeof g === 'object' && Array.isArray(g.keys))
       .map((g, gi) => ({
         id: String(g.id || 'group' + gi).slice(0, 32),
-        label: String(g.label || 'Nhóm ' + (gi + 1)).slice(0, 32),
+        label: String(g.label || 'Group ' + (gi + 1)).slice(0, 32),
         keys: g.keys.filter(isValidKey).map((key, ki) => ({
           id: String(key.id || g.id + '-' + ki).slice(0, 48),
           label: String(key.label).slice(0, 12),
@@ -241,15 +241,53 @@
     return changed;
   }
 
+  const EN_LABELS_KEY = 'wt.keylayout.en.v1';
+
+  /**
+   * Relabel the stock keys in English, once.
+   *
+   * The UI used to be Vietnamese, and a layout saved back then is still the
+   * user's own arrangement — so only labels that still carry the exact old
+   * default are translated. Anything renamed by hand is left alone, and the
+   * flag means a user who translates a label back keeps their choice.
+   */
+  const LEGACY_LABELS = {
+    'Điều hướng': 'Navigation',
+    'Tổ hợp Ctrl': 'Ctrl combos',
+    'Ký tự': 'Symbols',
+    'Phím chức năng': 'Function keys',
+    'Lệnh nhanh': 'Quick commands',
+    'Bàn phím': 'Keyboard',
+    'Sửa màn hình': 'Fix screen',
+    'Dán': 'Paste',
+    'Chép': 'Copy',
+    'Ô nhập': 'Input bar',
+  };
+
+  function translateLabels(layout) {
+    if (localStorage.getItem(EN_LABELS_KEY)) return false;
+    localStorage.setItem(EN_LABELS_KEY, '1');
+    let changed = false;
+    for (const group of layout) {
+      if (LEGACY_LABELS[group.label]) { group.label = LEGACY_LABELS[group.label]; changed = true; }
+      for (const key of group.keys) {
+        if (LEGACY_LABELS[key.label]) { key.label = LEGACY_LABELS[key.label]; changed = true; }
+      }
+    }
+    return changed;
+  }
+
   function load() {
     try {
       const raw = localStorage.getItem(STORAGE_KEY);
       if (!raw) return clone(DEFAULT_LAYOUT);
       const stored = sanitize(JSON.parse(raw));
       if (!stored) return clone(DEFAULT_LAYOUT);
-      addMissingAction(stored, 'keyboard', 'Bàn phím', '⌨');
-      addMissingAction(stored, 'normalScreen', 'Sửa màn hình', '⛶');
-      if (dropMacroEnter(stored)) {
+      addMissingAction(stored, 'keyboard', 'Keyboard', '⌨');
+      addMissingAction(stored, 'normalScreen', 'Fix screen', '⛶');
+      // Both run: `some` would short-circuit and skip the second migration.
+      const migrations = [dropMacroEnter(stored), translateLabels(stored)];
+      if (migrations.includes(true)) {
         localStorage.setItem(STORAGE_KEY, JSON.stringify(stored));
       }
       return stored;
@@ -260,7 +298,7 @@
 
   function save(layout) {
     const clean = sanitize(layout);
-    if (!clean) throw new Error('Bố cục phím không hợp lệ');
+    if (!clean) throw new Error('Invalid key layout');
     localStorage.setItem(STORAGE_KEY, JSON.stringify(clean));
     return clean;
   }
