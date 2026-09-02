@@ -58,7 +58,7 @@ jobs:
             runner: ubuntu-24.04-arm
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Image metadata
         id: meta
@@ -110,9 +110,6 @@ jobs:
       contents: read
 
     steps:
-      # Needed for the Docker Hub description sync, which reads README.md.
-      - uses: actions/checkout@v4
-
       - uses: docker/setup-buildx-action@v3
 
       - name: Image metadata
@@ -150,20 +147,6 @@ jobs:
           IMAGE: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           VERSION: ${{ steps.meta.outputs.version }}
         run: docker buildx imagetools inspect "${IMAGE}:${VERSION}"
-
-      - name: Sync the README to Docker Hub
-        # Only from the default branch: a tag build republishes an older README
-        # otherwise. Failure here must not fail a release that already shipped.
-        if: github.ref == 'refs/heads/master'
-        continue-on-error: true
-        uses: peter-evans/dockerhub-description@v4
-        with:
-          username: ${{ secrets.DOCKER_HUB_USERNAME }}
-          password: ${{ secrets.DOCKER_HUB_PAT }}
-          repository: ${{ env.IMAGE_NAME }}
-          short-description: >-
-            Mobile-first web terminal - a lightweight bastion with zsh and a full DevOps toolchain
-          readme-filepath: ./README.md
 
       - name: Smoke test amd64
         # Native to this runner, so it exercises that half for real: the server

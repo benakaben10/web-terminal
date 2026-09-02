@@ -9,5 +9,9 @@ ignored:
   # scratch directory, whose path is only known at build time; WORKDIR takes a
   # literal path and cannot express it.
   - DL3003
+  # SC1091 "not following: file not included in mock". shellcheck cannot follow
+  # `. /etc/os-release`, which does not exist at lint time. Informational only,
+  # but it is noise in every run.
+  - SC1091
 
 failure-threshold: warning
