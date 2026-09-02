@@ -1,0 +1,24 @@
+" Drag-to-scroll inside vim when vim runs under web-terminal.
+"
+" vim draws on the alternate screen, which has no scrollback, so the only thing
+" that can scroll is the input vim itself reads. web-terminal delivers the
+" wheel as SGR mouse events (DECSET 1006): vim needs mouse=a to receive them
+" and ttymouse=sgr to decode them correctly.
+"
+" The mere existence of this file makes vim skip defaults.vim, so source that
+" back before overriding anything, or the distribution's sane defaults are lost.
+if !has('nvim') && filereadable($VIMRUNTIME . '/defaults.vim')
+  unlet! g:skip_defaults_vim
+  source $VIMRUNTIME/defaults.vim
+endif
+
+set mouse=a
+if exists('&ttymouse')
+  set ttymouse=sgr
+endif
+
+" Three lines per notch, matching the ratio web-terminal uses to turn drag
+" distance into notches, so the text tracks the finger 1:1.
+if exists('&mousescroll')
+  set mousescroll=ver:3,hor:0
+endif

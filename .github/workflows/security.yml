@@ -1,0 +1,137 @@
+name: security
+
+# Four scanners, split into what gates a merge and what only gets reported.
+#
+# Gating on every CVE in an image like this would mean gating on other people's
+# release binaries — terraform, helm, k9s and friends carry whatever Go standard
+# library they were compiled against, and no change in this repository can fix
+# that. So the gates cover what this repository actually controls: the base
+# image's own packages, our Node dependencies, the Dockerfile, and secrets. The
+# full image scan still runs, and every finding lands in GitHub code scanning
+# where it can be triaged.
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+  schedule:
+    # A CVE can land in a base image that has not changed, so re-scan weekly.
+    - cron: '17 4 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  dockerfile:
+    name: dockerfile lint
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Hadolint
+        uses: hadolint/hadolint-action@v3.1.0
+        with:
+          dockerfile: Dockerfile
+          config: .hadolint.yaml
+          failure-threshold: warning
+
+  secrets:
+    name: secret scan
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # gitleaks walks history, not just the tip
+      - name: Gitleaks
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  dependencies:
+    name: npm audit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - name: Audit runtime dependencies
+        working-directory: server
+        # --omit=dev: the xterm addons are build-time only and never reach the
+        # image, so a finding in one of them is not a finding in the product.
+        run: |
+          npm install --package-lock-only --no-audit --no-fund
+          npm audit --omit=dev --audit-level=high
+
+  source:
+    name: source scan
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Trivy filesystem scan
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: fs
+          scan-ref: .
+          scanners: vuln,misconfig,secret
+          format: sarif
+          output: trivy-fs.sarif
+
+      - name: Upload to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-fs.sarif
+          category: trivy-fs
+
+  image:
+    name: image scan
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Build for scanning
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          load: true
+          tags: web-terminal:scan
+          cache-from: type=gha,scope=amd64
+
+      - name: Trivy image scan (report everything)
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: web-terminal:scan
+          format: sarif
+          output: trivy-image.sarif
+          severity: MEDIUM,HIGH,CRITICAL
+
+      - name: Upload to code scanning
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: trivy-image.sarif
+          category: trivy-image
+
+      - name: Gate on the base image's own packages
+        # Only OS packages, and only where a fixed version exists: those are
+        # the ones a rebuild or a version bump here can genuinely resolve.
+        uses: aquasecurity/trivy-action@0.28.0
+        with:
+          scan-type: image
+          image-ref: web-terminal:scan
+          pkg-types: os
+          ignore-unfixed: true
+          severity: HIGH,CRITICAL
+          format: table
+          exit-code: '1'

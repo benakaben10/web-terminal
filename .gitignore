@@ -1,0 +1,14 @@
+# Local deployment secrets — never commit.
+.env
+
+node_modules/
+server/node_modules/
+
+# Vendored at build time from npm; not source.
+web/vendor/xterm.js
+web/vendor/xterm.css
+web/vendor/addon-*.js
+web/vendor/fonts/
+
+*.log
+.DS_Store

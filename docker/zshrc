@@ -1,0 +1,124 @@
+# ~/.zshrc — web-terminal default profile (oh-my-zsh)
+
+export ZSH="$HOME/.oh-my-zsh"
+export ZSH_CUSTOM="$ZSH/custom"
+
+# Override with -e WT_ZSH_THEME=... ; "powerlevel10k/powerlevel10k" is installed too.
+ZSH_THEME="${WT_ZSH_THEME:-robbyrussell}"
+
+plugins=(
+  git
+  sudo
+  docker
+  docker-compose
+  extract
+  colored-man-pages
+  command-not-found
+  z
+  zsh-completions
+  zsh-autosuggestions
+  zsh-syntax-highlighting
+)
+
+# Skip oh-my-zsh's own update prompts — the image is the unit of upgrade here.
+DISABLE_AUTO_UPDATE=true
+DISABLE_UPDATE_PROMPT=true
+zstyle ':omz:update' mode disabled
+
+source "$ZSH/oh-my-zsh.sh"
+
+# ------------------------------------------------------------------ history
+HISTFILE="$HOME/.zsh_history"
+HISTSIZE=50000
+SAVEHIST=50000
+setopt APPEND_HISTORY INC_APPEND_HISTORY SHARE_HISTORY
+setopt HIST_IGNORE_DUPS HIST_IGNORE_ALL_DUPS HIST_IGNORE_SPACE
+setopt HIST_REDUCE_BLANKS HIST_VERIFY EXTENDED_HISTORY
+
+# --------------------------------------------------------------- behaviour
+setopt AUTO_CD AUTO_PUSHD PUSHD_IGNORE_DUPS
+setopt INTERACTIVE_COMMENTS NO_BEEP
+setopt COMPLETE_IN_WORD ALWAYS_TO_END
+
+# ---------------------------------------------------------------- keybinds
+# Match the escape sequences the web on-screen keyboard sends.
+bindkey -e
+bindkey '\e[H'    beginning-of-line
+bindkey '\e[1~'   beginning-of-line
+bindkey '\eOH'    beginning-of-line
+bindkey '\e[F'    end-of-line
+bindkey '\e[4~'   end-of-line
+bindkey '\eOF'    end-of-line
+bindkey '\e[3~'   delete-char
+bindkey '\e[2~'   overwrite-mode
+bindkey '\e[5~'   up-line-or-history
+bindkey '\e[6~'   down-line-or-history
+bindkey '\e[1;5C' forward-word
+bindkey '\e[1;5D' backward-word
+bindkey '\e[1;3C' forward-word
+bindkey '\e[1;3D' backward-word
+bindkey '^[[Z'    reverse-menu-complete
+bindkey '^U'      backward-kill-line
+bindkey '^W'      backward-kill-word
+
+# Up/Down search history by what is already typed — a big win on a phone,
+# where retyping a long command is painful.
+autoload -Uz up-line-or-beginning-search down-line-or-beginning-search
+zle -N up-line-or-beginning-search
+zle -N down-line-or-beginning-search
+bindkey '\e[A' up-line-or-beginning-search
+bindkey '\e[B' down-line-or-beginning-search
+bindkey '\eOA' up-line-or-beginning-search
+bindkey '\eOB' down-line-or-beginning-search
+
+# ------------------------------------------------------------- completion
+zstyle ':completion:*' menu select
+zstyle ':completion:*' matcher-list 'm:{a-zA-Z}={A-Za-z}' 'r:|[._-]=* r:|=*'
+zstyle ':completion:*' list-colors "${(s.:.)LS_COLORS}"
+zstyle ':completion:*:descriptions' format '%F{yellow}-- %d --%f'
+
+# --------------------------------------------------------------- suggestions
+ZSH_AUTOSUGGEST_STRATEGY=(history completion)
+ZSH_AUTOSUGGEST_HIGHLIGHT_STYLE='fg=8'
+bindkey '^ ' autosuggest-accept   # Ctrl+Space accepts the suggestion
+
+# ------------------------------------------------------------------ aliases
+alias ll='ls -lah --color=auto'
+alias la='ls -A --color=auto'
+alias l='ls -CF --color=auto'
+alias ls='ls --color=auto'
+alias grep='grep --color=auto'
+alias df='df -h'
+alias du='du -h'
+alias free='free -h'
+alias ports='netstat -tulpn 2>/dev/null || ss -tulpn'
+alias psg='ps aux | grep -v grep | grep -i'
+alias reload='source ~/.zshrc'
+
+# Stops the *container* (SIGTERM to PID 1), not the host.
+alias poweroff='kill 1'
+alias reboot='echo "Không hỗ trợ trong container. Dùng: docker restart <container>"'
+
+# ------------------------------------------------------------------- prompt
+# Anything installed with `go install` lands in $GOPATH/bin, which is inside
+# $HOME and therefore inside the persisted volume. The DevOps toolchain itself
+# lives in /usr/local/bin, already on the default PATH.
+export GOPATH="${GOPATH:-$HOME/go}"
+export PATH="$GOPATH/bin:$PATH"
+
+export EDITOR="${EDITOR:-vim}"
+export PAGER="${PAGER:-less}"
+# --mouse: less reads the wheel itself, which is what makes drag-to-scroll work
+# in less, man and git diff. Deliberately no -X: less has to enter the alternate
+# screen for the gesture to be routed to it, because on the normal buffer the
+# terminal's own scrollback always wins.
+export LESS='-R -F --mouse --wheel-lines=3'
+export LANG="${LANG:-C.UTF-8}"
+
+# Narrow phone screens: keep the prompt on its own short line.
+if [[ -n "$WEB_TERMINAL" ]]; then
+  export COLUMNS_MIN_WRAP=1
+fi
+
+[[ -f "$HOME/.zshrc.local" ]] && source "$HOME/.zshrc.local"
+[[ -f "$HOME/.p10k.zsh" ]] && source "$HOME/.p10k.zsh"

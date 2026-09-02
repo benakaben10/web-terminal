@@ -1,0 +1,13 @@
+# Two rules are switched off deliberately; everything else is expected to pass.
+ignored:
+  # DL3008 "pin versions in apt-get install". Pinning every apt package to an
+  # exact version makes the build fail the moment Ubuntu publishes a security
+  # update, which is the opposite of what a security-scanned image wants. The
+  # base image tag is pinned instead, and the scan workflow watches for CVEs.
+  - DL3008
+  # DL3003 "use WORKDIR to switch directory". These are `cd` into a mktemp -d
+  # scratch directory, whose path is only known at build time; WORKDIR takes a
+  # literal path and cannot express it.
+  - DL3003
+
+failure-threshold: warning

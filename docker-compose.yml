@@ -1,0 +1,52 @@
+services:
+  web-terminal:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: web-terminal:2.0.0
+    container_name: web-terminal
+    hostname: ${WT_HOSTNAME:-web-terminal}
+    restart: unless-stopped
+
+    # Bound to loopback on purpose: nginx on the host terminates :80 and
+    # proxies here. Change to "7681:7681" to expose the container directly.
+    ports:
+      - "127.0.0.1:7681:7681"
+
+    environment:
+      WT_TITLE: ${WT_TITLE:-Web Terminal}
+      WT_USERNAME: ${WT_USERNAME:-admin}
+      WT_PASSWORD: ${WT_PASSWORD:?WT_PASSWORD is required - set it in .env}
+      WT_SHELL: /bin/zsh
+      WT_ZSH_THEME: ${WT_ZSH_THEME:-robbyrussell}
+      WT_MAX_SESSIONS: ${WT_MAX_SESSIONS:-12}
+      WT_TZ: ${WT_TZ:-Asia/Ho_Chi_Minh}
+      TZ: ${WT_TZ:-Asia/Ho_Chi_Minh}
+
+    volumes:
+      # Persist shell history, dotfiles and anything the admin leaves in $HOME.
+      - wt-home:/root
+      # Optional: uncomment to drive the host's docker daemon from the terminal.
+      # - /var/run/docker.sock:/var/run/docker.sock
+
+    # A shell needs a real tty and room for job control.
+    tty: true
+    stdin_open: true
+    init: false          # tini is already PID 1 via the image ENTRYPOINT
+    shm_size: 256m
+
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:7681/healthz"]
+      interval: 30s
+      timeout: 4s
+      retries: 3
+      start_period: 10s
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+volumes:
+  wt-home:
