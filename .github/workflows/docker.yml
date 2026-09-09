@@ -80,7 +80,7 @@ jobs:
 
       - name: Log in to Docker Hub
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
@@ -125,7 +125,7 @@ jobs:
             type=raw,value=latest,enable={{is_default_branch}}
 
       - name: Log in to Docker Hub
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ${{ env.REGISTRY }}
           username: ${{ secrets.DOCKER_HUB_USERNAME }}
